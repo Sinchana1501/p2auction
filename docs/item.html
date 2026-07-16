@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lot detail — p2auction House</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topnav" id="topnav"></div>
+
+<main class="page" id="page">
+  <div class="empty-state">Loading lot…</div>
+</main>
+
+<footer class="site-footer">p2auction — a peer to peer campus marketplace</footer>
+
+<script src="app.js"></script>
+<script>
+  renderNav('browse');
+
+  const params = new URLSearchParams(window.location.search);
+  const itemId = params.get('id');
+  const page = document.getElementById('page');
+
+  async function loadItem() {
+    if (!itemId) {
+      page.innerHTML = '<div class="empty-state">No item specified. <a href="index.html">Back to browse</a>.</div>';
+      return;
+    }
+    try {
+      const item = await apiRequest('GET', '/getauctiondata/' + itemId);
+      renderItem(item);
+    } catch (err) {
+      page.innerHTML = `<div class="empty-state">Couldn't load this lot: ${escapeHtml(err.message)}<br><br><a href="index.html">Back to browse</a></div>`;
+    }
+  }
+
+  function renderItem(item) {
+    const bid = item.currentBid || item.startingBid || 0;
+    const img = item.img || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=450&fit=crop';
+    const session = getSession();
+    const history = (item.bids || []).slice().reverse();
+    const sold = item.status === 'sold';
+    const isSeller = session && item.sellerRollNo && session.rollNo === item.sellerRollNo;
+
+    page.innerHTML = `
+      <div class="item-layout">
+        <div>
+          <img class="item-img" src="${escapeHtml(img)}" alt="${escapeHtml(item.title)}" onerror="this.src='https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&h=450&fit=crop'">
+        </div>
+        <div>
+          <div class="eyebrow">Lot detail ${sold ? '&middot; <span class="badge badge-sold">Sold</span>' : (item.sellerRollNo ? '&middot; <span class="badge badge-open">Open</span>' : '')}</div>
+          <h1 class="item-title">${escapeHtml(item.title)}</h1>
+          <p class="item-desc">${escapeHtml(item.description)}</p>
+          ${item.sellerName ? `<p style="margin-top:-16px; margin-bottom:16px; font-size:13px; color:var(--muted);">Listed by ${escapeHtml(item.sellerName)}</p>` : ''}
+          ${item.link ? `<p style="margin-top:-8px; margin-bottom:24px;"><a href="${escapeHtml(item.link)}" target="_blank" rel="noopener">View original listing</a></p>` : ''}
+
+          <div class="bid-summary">
+            <div>
+              <div class="label">${sold ? 'Sold for' : (item.currentBid ? 'Current bid' : 'Starting bid')}</div>
+              <div class="value">${sold ? item.soldAmount : bid}</div>
+              ${sold
+                ? `<div class="who">Sold to: ${escapeHtml(item.soldTo)}</div>`
+                : (item.highestBidderName ? `<div class="who">Highest bidder: ${escapeHtml(item.highestBidderName)}</div>` : '')}
+            </div>
+          </div>
+
+          <div id="banner" class="banner"></div>
+
+          ${sold ? `
+            <p style="color: var(--muted); font-size: 13px;">This item has been sold and is no longer accepting bids.</p>
+          ` : isSeller ? `
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+              You listed this item. ${item.highestBidderName ? `Close the auction to sell it to ${escapeHtml(item.highestBidderName)} for ${bid}.` : 'Waiting for bids before you can close it.'}
+            </p>
+            <button class="bid" id="closeAuctionBtn" ${item.highestBidderName ? '' : 'disabled'}>Close auction &amp; mark sold</button>
+          ` : session ? `
+            <div class="field">
+              <label>Your bid (must be more than ${bid})</label>
+              <input type="number" id="bidAmount" min="${bid + 1}" placeholder="${bid + 1}">
+            </div>
+            <button class="bid" id="placeBidBtn">Place bid</button>
+          ` : `
+            <p style="color: var(--muted); font-size: 13px;">
+              <a href="account.html">Sign in</a> to place a bid on this lot.
+            </p>
+          `}
+
+          <div class="bid-history">
+            <h3>Bid history</h3>
+            ${history.length ? history.map(b => `
+              <div class="bid-row">
+                <span class="name">${escapeHtml(b.bidderName)}</span>
+                <span class="amount">${b.amount}</span>
+                <span class="time">${timeAgo(b.placedAt)}</span>
+              </div>
+            `).join('') : '<p style="color: var(--muted); font-size: 13px;">No bids yet — be the first.</p>'}
+          </div>
+        </div>
+      </div>
+    `;
+
+    const bidBtn = document.getElementById('placeBidBtn');
+    if (bidBtn) {
+      bidBtn.addEventListener('click', async () => {
+        const banner = document.getElementById('banner');
+        const amountInput = document.getElementById('bidAmount');
+        const amount = Number(amountInput.value);
+
+        if (!amount || amount <= bid) {
+          banner.className = 'banner failure show';
+          banner.textContent = `Enter a number higher than ${bid}.`;
+          return;
+        }
+
+        bidBtn.disabled = true;
+        bidBtn.textContent = 'Placing bid…';
+        try {
+          await apiRequest('POST', '/placebid', {
+            auctionId: item._id,
+            bidderRollNo: session.rollNo,
+            bidderName: session.fname + ' ' + session.lname,
+            amount,
+          });
+          banner.className = 'banner success show';
+          banner.textContent = 'Bid placed.';
+          await loadItem();
+        } catch (err) {
+          banner.className = 'banner failure show';
+          banner.textContent = err.message;
+          bidBtn.disabled = false;
+          bidBtn.textContent = 'Place bid';
+        }
+      });
+    }
+
+    const closeBtn = document.getElementById('closeAuctionBtn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', async () => {
+        const banner = document.getElementById('banner');
+        closeBtn.disabled = true;
+        closeBtn.textContent = 'Closing…';
+        try {
+          await apiRequest('POST', '/closeauction', {
+            auctionId: item._id,
+            sellerRollNo: session.rollNo,
+          });
+          banner.className = 'banner success show';
+          banner.textContent = 'Auction closed — marked as sold.';
+          await loadItem();
+        } catch (err) {
+          banner.className = 'banner failure show';
+          banner.textContent = err.message;
+          closeBtn.disabled = false;
+          closeBtn.textContent = 'Close auction & mark sold';
+        }
+      });
+    }
+  }
+
+  loadItem();
+</script>
+
+</body>
+</html>

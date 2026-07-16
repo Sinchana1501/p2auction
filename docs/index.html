@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browse — p2auction House</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topnav" id="topnav"></div>
+
+<main class="page">
+  <div class="eyebrow">Current lots</div>
+  <h1>Browse <em>live</em> auctions</h1>
+  <p class="page-sub">Every item currently up for bidding. Click into a lot to see full details, bid history, and place your own bid.</p>
+
+  <div id="grid" class="grid"></div>
+</main>
+
+<footer class="site-footer">p2auction — a peer to peer campus marketplace</footer>
+
+<script src="app.js"></script>
+<script>
+  renderNav('browse');
+
+  async function loadListings() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '<div class="empty-state">Loading lots…</div>';
+    try {
+      const items = await apiRequest('GET', '/getauctiondata');
+      if (!items.length) {
+        grid.innerHTML = '<div class="empty-state">No lots listed yet. <a href="sell.html">List the first one</a>.</div>';
+        return;
+      }
+      grid.innerHTML = items.map(item => {
+        const bid = item.currentBid || item.startingBid || 0;
+        const img = item.img || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=300&fit=crop';
+        const sold = item.status === 'sold';
+        return `
+          <a class="card" href="item.html?id=${item._id}">
+            <div class="card-badge-row">
+              ${sold ? '<span class="badge badge-sold">Sold</span>' : ''}
+              <img class="card-img" src="${escapeHtml(img)}" alt="${escapeHtml(item.title)}" onerror="this.src='https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=300&fit=crop'">
+            </div>
+            <div class="card-body">
+              <div class="card-title">${escapeHtml(item.title)}</div>
+              <div class="card-desc">${escapeHtml(item.description)}</div>
+              <div class="card-bid-row">
+                <span class="card-bid-label">${sold ? 'Sold for' : (item.currentBid ? 'Current bid' : 'Starting bid')}</span>
+                <span class="card-bid-value">${sold ? item.soldAmount : bid}</span>
+              </div>
+            </div>
+          </a>
+        `;
+      }).join('');
+    } catch (err) {
+      grid.innerHTML = `<div class="empty-state">Couldn't load listings: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  loadListings();
+</script>
+
+</body>
+</html>

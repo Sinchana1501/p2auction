@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>List an item — p2auction House</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topnav" id="topnav"></div>
+
+<main class="page page-narrow">
+  <div class="eyebrow">New lot</div>
+  <h1>List an <em>item</em></h1>
+  <p class="page-sub">Add something to the auction floor for other students to bid on.</p>
+
+  <div class="panel-box" id="panelBox">
+    <div id="banner" class="banner"></div>
+    <form id="sellForm">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="title" required placeholder="Vintage watch">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="description" rows="3" required placeholder="What is it, condition, why it's worth bidding on"></textarea>
+      </div>
+      <div class="field">
+        <label>Starting bid</label>
+        <input type="number" id="startingBid" min="0" value="0" required>
+      </div>
+      <div class="field">
+        <label>Image URL (optional)</label>
+        <input type="text" id="img" placeholder="https://...">
+      </div>
+      <div class="field">
+        <label>Link (optional)</label>
+        <input type="text" id="link" placeholder="https://...">
+      </div>
+      <button type="submit" class="primary" style="width:100%;">List item</button>
+    </form>
+  </div>
+</main>
+
+<footer class="site-footer">p2auction — a peer to peer campus marketplace</footer>
+
+<script src="app.js"></script>
+<script>
+  renderNav('sell');
+
+  const session = getSession();
+  const panelBox = document.getElementById('panelBox');
+
+  if (!session) {
+    panelBox.innerHTML = `<p style="color: var(--muted); font-size: 14px; margin:0;">
+      You need to <a href="account.html">sign in</a> before listing an item.
+    </p>`;
+  } else {
+    document.getElementById('sellForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const banner = document.getElementById('banner');
+      const submitBtn = e.target.querySelector('button');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Listing…';
+      try {
+        const item = await apiRequest('POST', '/addauctiondata', {
+          title: document.getElementById('title').value,
+          description: document.getElementById('description').value,
+          startingBid: Number(document.getElementById('startingBid').value) || 0,
+          img: document.getElementById('img').value,
+          link: document.getElementById('link').value,
+          sellerRollNo: session.rollNo,
+          sellerName: session.fname + ' ' + session.lname,
+        });
+        window.location.href = "item.html?id=" + item._id;
+      } catch (err) {
+        banner.className = 'banner failure show';
+        banner.textContent = err.message;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'List item';
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
