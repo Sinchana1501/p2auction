@@ -30,7 +30,7 @@ app.post("/signup", async (req, res) => {
 app.post("/signin", async (req, res) => {
   try {
     const { rollNo, password } = req.body
-    const user = await SigninModel.findOne({ rollNo, password })
+    const user = await SignupModel.findOne({ rollNo, password })
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" })
     }
